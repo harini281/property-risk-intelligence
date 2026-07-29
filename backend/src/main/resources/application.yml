@@ -1,0 +1,49 @@
+spring:
+  application:
+    name: property-risk-intelligence-system
+
+  # Supabase PostgreSQL connection.
+  # Populate via environment variables - do not commit real credentials.
+  datasource:
+    url: ${SUPABASE_DB_URL:jdbc:postgresql://localhost:5432/postgres}
+    username: ${SUPABASE_DB_USERNAME:postgres}
+    password: ${SUPABASE_DB_PASSWORD:changeme}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      # 'validate' in production; left as 'update' for local development convenience.
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+server:
+  port: ${SERVER_PORT:8080}
+
+# External data provider configuration.
+# TODO: Populate base URLs and API keys once accounts are provisioned;
+# never commit real keys - use environment variables in every environment.
+external-api:
+  weather:
+    # NOAA/NWS is free and does not require an API key. NWS requires a
+    # descriptive User-Agent so operators can contact an application owner.
+    base-url: ${WEATHER_API_BASE_URL:https://api.weather.gov}
+    user-agent: ${WEATHER_API_USER_AGENT:property-risk-intelligence/1.0 (contact@example.com)}
+  flood:
+    base-url: ${FLOOD_API_BASE_URL:}
+    api-key: ${FLOOD_API_KEY:}
+  air-quality:
+    base-url: ${AIR_QUALITY_API_BASE_URL:}
+    api-key: ${AIR_QUALITY_API_KEY:}
+  geocoding:
+    # Nominatim/OpenStreetMap is used only for submitted address searches.
+    # Production deployments should provide a hosted geocoder if volume grows.
+    base-url: ${GEOCODING_API_BASE_URL:https://nominatim.openstreetmap.org}
+    user-agent: ${GEOCODING_API_USER_AGENT:property-risk-intelligence/1.0 (contact@example.com)}
+
+logging:
+  level:
+    com.propertyrisk: INFO
