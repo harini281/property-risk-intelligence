@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Thermometer,
   Wind,
@@ -21,7 +21,8 @@ import { AppLayout } from '../components/AppLayout';
 import { Card, CardHeader } from '../components/Card';
 import { StatCard, Badge } from '../components/RiskMeter';
 import { InteractiveMap } from '../components/InteractiveMap';
-import { currentWeather, weatherAlerts } from '../data/mockData';
+import { currentWeather as defaultWeather, weatherAlerts } from '../data/mockData';
+import { getWeather } from '../services/api';
 
 const mapLayers = [
   { id: 'radar', label: 'Weather Radar', color: '#3b82f6' },
@@ -54,6 +55,30 @@ function severityAccent(severity: string): string {
 
 export default function WeatherCenter() {
   const [activeLayer, setActiveLayer] = useState('radar');
+  const [currentWeather, setCurrentWeather] = useState(defaultWeather);
+  const [weatherMessage, setWeatherMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void getWeather(42.2808, -83.743).then((weather) => {
+      if (!active) return;
+      if (!weather.success) {
+        setWeatherMessage(weather.message ?? 'Live weather is temporarily unavailable.');
+        return;
+      }
+      const fahrenheit = weather.temperatureCelsius === null ? null : (weather.temperatureCelsius * 9 / 5) + 32;
+      setCurrentWeather((previous) => ({
+        ...previous,
+        location: weather.location ?? previous.location,
+        temperature: fahrenheit === null ? previous.temperature : Math.round(fahrenheit),
+        condition: weather.condition ?? previous.condition,
+        humidity: weather.humidityPercent === null ? previous.humidity : Math.round(weather.humidityPercent),
+        windSpeed: weather.windSpeedKph === null ? previous.windSpeed : Math.round(weather.windSpeedKph / 1.60934),
+      }));
+      setWeatherMessage(weather.message);
+    }).catch(() => { if (active) setWeatherMessage('Live weather is temporarily unavailable.'); });
+    return () => { active = false; };
+  }, []);
 
   // Radar markers centered on the current weather location (Ann Arbor, MI).
   const radarMarkers = [
@@ -90,6 +115,7 @@ export default function WeatherCenter() {
             <p className="text-sm text-ink-500 mt-1">
               Real-time atmospheric conditions and severe weather monitoring
             </p>
+            {weatherMessage && <p className="mt-1 text-xs text-ink-500">{weatherMessage}</p>}
           </div>
           <div className="flex items-center gap-2">
             <Badge variant="brand">

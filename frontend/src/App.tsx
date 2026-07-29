@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import type { ReactNode } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -16,40 +17,38 @@ import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import { Loader2 } from 'lucide-react';
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+function AppLoader() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-ink-50">
+      <Loader2 className="w-8 h-8 animate-spin text-brand-600" />
+    </div>
+  );
+}
+
+function AuthRoute({ children, requireAuth }: { children: ReactNode; requireAuth: boolean }) {
   const { session, loading } = useAuth();
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-ink-50">
-        <Loader2 className="w-8 h-8 animate-spin text-brand-600" />
-      </div>
-    );
+    return <AppLoader />;
   }
 
-  if (!session) {
+  if (requireAuth && !session) {
     return <Navigate to="/" replace />;
+  }
+
+  if (!requireAuth && session) {
+    return <Navigate to="/app" replace />;
   }
 
   return <>{children}</>;
 }
 
-function PublicRoute({ children }: { children: React.ReactNode }) {
-  const { session, loading } = useAuth();
+function ProtectedRoute({ children }: { children: ReactNode }) {
+  return <AuthRoute requireAuth>{children}</AuthRoute>;
+}
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-ink-50">
-        <Loader2 className="w-8 h-8 animate-spin text-brand-600" />
-      </div>
-    );
-  }
-
-  if (session) {
-    return <Navigate to="/app" replace />;
-  }
-
-  return <>{children}</>;
+function PublicRoute({ children }: { children: ReactNode }) {
+  return <AuthRoute requireAuth={false}>{children}</AuthRoute>;
 }
 
 export default function App() {

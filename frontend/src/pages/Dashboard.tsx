@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, CloudHail, Wind, Waves, Flame, CloudLightning,
@@ -10,6 +10,7 @@ import { Badge, ProgressBar } from '../components/RiskMeter';
 import { InteractiveMap } from '../components/InteractiveMap';
 import { Sparkline } from '../components/Charts';
 import { properties, stormEvents, weatherAlerts, aiPredictions, contractorDemand } from '../data/mockData';
+import { getHealthStatus, getPropertyRisk } from '../services/api';
 
 const mapLayers = [
   { id: 'radar', label: 'Weather Radar', color: '#3b82f6' },
@@ -20,6 +21,34 @@ const mapLayers = [
 export default function Dashboard() {
   const navigate = useNavigate();
   const [activeLayer, setActiveLayer] = useState('radar');
+  const [backendStatus, setBackendStatus] = useState<'loading' | 'online' | 'offline'>('loading');
+  const [backendRisk, setBackendRisk] = useState<number | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const bootstrap = async () => {
+      try {
+        const health = await getHealthStatus();
+        if (!isMounted) return;
+        setBackendStatus(health.status === 'UP' ? 'online' : 'offline');
+
+        const risk = await getPropertyRisk(42.2808, -83.743);
+        if (!isMounted) return;
+        setBackendRisk(Number(risk.overallRiskLevel === 'HIGH' ? 78 : risk.overallRiskLevel === 'MEDIUM' ? 54 : risk.overallRiskLevel === 'LOW' ? 24 : 50));
+      } catch (error) {
+        if (!isMounted) return;
+        setBackendStatus('offline');
+        setBackendRisk(null);
+      }
+    };
+
+    void bootstrap();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const markers = properties.map((p) => ({
     id: p.id,
@@ -43,15 +72,16 @@ export default function Dashboard() {
               <span className="w-1.5 h-1.5 rounded-full bg-risk-high animate-pulse" />
               4 Active Alerts
             </Badge>
-            <Badge variant="brand">
-              <Activity className="w-3 h-3" /> Live
+            <Badge variant={backendStatus === 'online' ? 'brand' : 'neutral'}>
+              <Activity className={`w-3 h-3 ${backendStatus === 'loading' ? 'animate-pulse' : ''}`} />
+              {backendStatus === 'online' ? 'Backend Connected' : backendStatus === 'loading' ? 'Connecting...' : 'Offline'}
             </Badge>
           </div>
         </div>
 
         {/* Risk Score Cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <RiskScoreCard icon={<ShieldCheck className="w-5 h-5" />} label="Overall Risk" value={76} color="text-risk-high" />
+          <RiskScoreCard icon={<ShieldCheck className="w-5 h-5" />} label="Overall Risk" value={backendRisk ?? 76} color="text-risk-high" />
           <RiskScoreCard icon={<Waves className="w-5 h-5" />} label="Flood" value={48} color="text-brand-500" />
           <RiskScoreCard icon={<CloudHail className="w-5 h-5" />} label="Hail" value={72} color="text-risk-medium" />
           <RiskScoreCard icon={<Wind className="w-5 h-5" />} label="Wind" value={61} color="text-risk-medium" />
