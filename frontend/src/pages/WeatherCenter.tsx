@@ -16,13 +16,14 @@ import {
   Navigation,
   RefreshCw,
   Activity,
+  Loader2,
 } from 'lucide-react';
 import { AppLayout } from '../components/AppLayout';
 import { Card, CardHeader } from '../components/Card';
 import { StatCard, Badge } from '../components/RiskMeter';
 import { InteractiveMap } from '../components/InteractiveMap';
-import { currentWeather as defaultWeather, weatherAlerts } from '../data/mockData';
 import { getWeather } from '../services/api';
+import type { PropertyRiskApiResponse } from '../types/risk';
 
 const mapLayers = [
   { id: 'radar', label: 'Weather Radar', color: '#3b82f6' },
@@ -55,38 +56,69 @@ function severityAccent(severity: string): string {
 
 export default function WeatherCenter() {
   const [activeLayer, setActiveLayer] = useState('radar');
-  const [currentWeather, setCurrentWeather] = useState(defaultWeather);
+  const [currentWeather, setCurrentWeather] = useState<PropertyRiskApiResponse['weather'] | null>(null);
   const [weatherMessage, setWeatherMessage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
+    setLoading(true);
     void getWeather(42.2808, -83.743).then((weather) => {
       if (!active) return;
       if (!weather.success) {
+        setCurrentWeather(null);
         setWeatherMessage(weather.message ?? 'Live weather is temporarily unavailable.');
+        setError(weather.message ?? 'Live weather is temporarily unavailable.');
         return;
       }
-      const fahrenheit = weather.temperatureCelsius === null ? null : (weather.temperatureCelsius * 9 / 5) + 32;
-      setCurrentWeather((previous) => ({
-        ...previous,
-        location: weather.location ?? previous.location,
-        temperature: fahrenheit === null ? previous.temperature : Math.round(fahrenheit),
-        condition: weather.condition ?? previous.condition,
-        humidity: weather.humidityPercent === null ? previous.humidity : Math.round(weather.humidityPercent),
-        windSpeed: weather.windSpeedKph === null ? previous.windSpeed : Math.round(weather.windSpeedKph / 1.60934),
-      }));
+      setCurrentWeather(weather);
       setWeatherMessage(weather.message);
-    }).catch(() => { if (active) setWeatherMessage('Live weather is temporarily unavailable.'); });
+      setError(null);
+    }).catch(() => {
+      if (active) {
+        setCurrentWeather(null);
+        setWeatherMessage('Live weather is temporarily unavailable.');
+        setError('Live weather is temporarily unavailable.');
+      }
+    }).finally(() => {
+      if (active) setLoading(false);
+    });
     return () => { active = false; };
   }, []);
 
-  // Radar markers centered on the current weather location (Ann Arbor, MI).
+  const weatherSummary = currentWeather ? {
+    location: currentWeather.location ?? 'Unknown location',
+    temperature: currentWeather.temperatureCelsius === null ? null : Math.round((currentWeather.temperatureCelsius * 9 / 5) + 32),
+    condition: currentWeather.condition ?? 'Unavailable',
+    humidity: currentWeather.humidityPercent == null ? null : Math.round(currentWeather.humidityPercent),
+    windSpeed: currentWeather.windSpeedKph == null ? null : Math.round(currentWeather.windSpeedKph / 1.60934),
+    windDirection: 'Live',
+    feelsLike: currentWeather.temperatureCelsius === null ? null : Math.round((currentWeather.temperatureCelsius * 9 / 5) + 32),
+    pressure: null,
+    visibility: null,
+    uvIndex: '—',
+    forecast: [],
+  } : {
+    location: 'Unavailable',
+    temperature: null,
+    condition: 'Unavailable',
+    humidity: null,
+    windSpeed: null,
+    windDirection: 'Live',
+    feelsLike: null,
+    pressure: null,
+    visibility: null,
+    uvIndex: '—',
+    forecast: [],
+  };
+
   const radarMarkers = [
     {
       id: 'station-annarbor',
       lat: 42.2808,
       lng: -83.7430,
-      label: `${currentWeather.location} • ${currentWeather.temperature}°`,
+      label: `${weatherSummary.location} • ${weatherSummary.temperature ?? '—'}°`,
       color: '#2563eb',
     },
     {
@@ -116,6 +148,7 @@ export default function WeatherCenter() {
               Real-time atmospheric conditions and severe weather monitoring
             </p>
             {weatherMessage && <p className="mt-1 text-xs text-ink-500">{weatherMessage}</p>}
+            {error && <p className="mt-1 text-xs text-risk-high">{error}</p>}
           </div>
           <div className="flex items-center gap-2">
             <Badge variant="brand">
@@ -174,45 +207,45 @@ export default function WeatherCenter() {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
             <StatCard
               label="Temperature"
-              value={`${currentWeather.temperature}°F`}
+              value={weatherSummary.temperature == null ? '—' : `${weatherSummary.temperature}°F`}
               icon={<Thermometer className="w-5 h-5" />}
               color="text-brand-600"
             />
             <StatCard
               label="Wind Speed"
-              value={`${currentWeather.windSpeed} mph`}
+              value={weatherSummary.windSpeed == null ? '—' : `${weatherSummary.windSpeed} mph`}
               icon={<Wind className="w-5 h-5" />}
               color="text-brand-600"
-              trend={`${currentWeather.windDirection} direction`}
+              trend={weatherSummary.windDirection === 'Live' ? 'Live direction' : `${weatherSummary.windDirection} direction`}
               trendUp
             />
             <StatCard
               label="Humidity"
-              value={`${currentWeather.humidity}%`}
+              value={weatherSummary.humidity == null ? '—' : `${weatherSummary.humidity}%`}
               icon={<Droplets className="w-5 h-5" />}
               color="text-brand-600"
             />
             <StatCard
               label="Pressure"
-              value={`${currentWeather.pressure} inHg`}
+              value={weatherSummary.pressure == null ? '—' : `${weatherSummary.pressure} inHg`}
               icon={<Gauge className="w-5 h-5" />}
               color="text-brand-600"
             />
             <StatCard
               label="Visibility"
-              value={`${currentWeather.visibility} mi`}
+              value={weatherSummary.visibility == null ? '—' : `${weatherSummary.visibility} mi`}
               icon={<Eye className="w-5 h-5" />}
               color="text-brand-600"
             />
             <StatCard
               label="UV Index"
-              value={currentWeather.uvIndex}
+              value={weatherSummary.uvIndex}
               icon={<Sun className="w-5 h-5" />}
               color="text-brand-600"
             />
             <StatCard
               label="Feels Like"
-              value={`${currentWeather.feelsLike}°F`}
+              value={weatherSummary.feelsLike == null ? '—' : `${weatherSummary.feelsLike}°F`}
               icon={<Thermometer className="w-5 h-5" />}
               color="text-brand-600"
             />
@@ -223,11 +256,15 @@ export default function WeatherCenter() {
         <Card>
           <CardHeader
             title="5-Day Forecast"
-            subtitle={`${currentWeather.location} — extended outlook`}
+            subtitle={`${weatherSummary.location} — extended outlook`}
             icon={<CloudSun className="w-5 h-5" />}
           />
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            {currentWeather.forecast.map((day, idx) => {
+            {weatherSummary.forecast.length === 0 ? (
+              <div className="col-span-full rounded-lg border border-dashed border-ink-200 p-4 text-sm text-ink-500">
+                Forecast details are not available from the current backend response.
+              </div>
+            ) : weatherSummary.forecast.map((day, idx) => {
               const cfg = conditionIcon[day.condition] ?? conditionIcon['Partly Cloudy'];
               const Icon = cfg.icon;
               const isToday = idx === 0;
@@ -284,42 +321,19 @@ export default function WeatherCenter() {
         <Card>
           <CardHeader
             title="Active Weather Alerts"
-            subtitle={`${weatherAlerts.length} active warnings — sorted by severity`}
+            subtitle="Backend-driven weather status"
             icon={<AlertTriangle className="w-5 h-5" />}
           />
           <div className="space-y-3">
-            {weatherAlerts.map((alert) => (
-              <div
-                key={alert.id}
-                className={`p-4 rounded-lg border transition-colors ${severityAccent(
-                  alert.severity,
-                )}`}
-              >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle
-                      className={`w-4 h-4 ${
-                        alert.severity === 'extreme' || alert.severity === 'severe'
-                          ? 'text-risk-high'
-                          : alert.severity === 'moderate'
-                            ? 'text-risk-medium'
-                            : 'text-ink-500'
-                      }`}
-                    />
-                    <span className="text-sm font-semibold text-ink-900">{alert.type}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={severityVariant(alert.severity)}>{alert.severity}</Badge>
-                    <span className="text-xs text-ink-500">{alert.expires}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5 text-xs text-ink-600 mb-1.5">
-                  <MapPin className="w-3.5 h-3.5" />
-                  {alert.area}
-                </div>
-                <p className="text-xs text-ink-500 leading-relaxed">{alert.description}</p>
+            {error ? (
+              <div className="rounded-lg border border-dashed border-ink-200 p-4 text-sm text-ink-500">
+                {error}
               </div>
-            ))}
+            ) : (
+              <div className="rounded-lg border border-dashed border-ink-200 p-4 text-sm text-ink-500">
+                The live backend response did not include alert payloads, so no alert cards are displayed.
+              </div>
+            )}
           </div>
         </Card>
       </div>
