@@ -22,7 +22,7 @@ Main frontend folders:
 - [frontend/src/types](frontend/src/types) — shared TypeScript response types.
 
 ### Backend
-Location: [backend/](backend)
+Location: [backend/demo/propertyrisk-backend](backend/demo/propertyrisk-backend)
 
 Responsibilities:
 - Expose REST APIs for property-risk analysis.
@@ -31,23 +31,23 @@ Responsibilities:
 - Provide a clean API boundary that can later be replaced by real external weather/flood/air-quality providers.
 
 Main backend folders:
-- [backend/src/main/java/com/propertyrisk/controller](backend/src/main/java/com/propertyrisk/controller) — REST endpoints.
-- [backend/src/main/java/com/propertyrisk/service](backend/src/main/java/com/propertyrisk/service) — business logic services.
-- [backend/src/main/java/com/propertyrisk/agents](backend/src/main/java/com/propertyrisk/agents) — domain-specific agents.
-- [backend/src/main/java/com/propertyrisk/client](backend/src/main/java/com/propertyrisk/client) — external API clients.
-- [backend/src/main/java/com/propertyrisk/config](backend/src/main/java/com/propertyrisk/config) — configuration and CORS setup.
+- [backend/demo/propertyrisk-backend/src/main/java/com/propertyrisk/controller](backend/demo/propertyrisk-backend/src/main/java/com/propertyrisk/controller) — REST endpoints.
+- [backend/demo/propertyrisk-backend/src/main/java/com/propertyrisk/service](backend/demo/propertyrisk-backend/src/main/java/com/propertyrisk/service) — business logic services.
+- [backend/demo/propertyrisk-backend/src/main/java/com/propertyrisk/agents](backend/demo/propertyrisk-backend/src/main/java/com/propertyrisk/agents) — domain-specific agents.
+- [backend/demo/propertyrisk-backend/src/main/java/com/propertyrisk/client](backend/demo/propertyrisk-backend/src/main/java/com/propertyrisk/client) — external API clients.
+- [backend/demo/propertyrisk-backend/src/main/java/com/propertyrisk/config](backend/demo/propertyrisk-backend/src/main/java/com/propertyrisk/config) — configuration and CORS setup.
 
 ## 2. Current architecture
 
 ### Frontend flow
 1. The user opens the app in the browser.
-2. React routes render the correct pages under [frontend/src/pages](frontend/src/pages).
-3. The UI loads data from the backend through [frontend/src/services/api.ts](frontend/src/services/api.ts).
+2. React routes render the correct pages under [src/pages](src/pages).
+3. The UI loads data from the backend through [src/services/api.ts](src/services/api.ts).
 4. The dashboard and other screens display the returned risk information.
 
 ### Backend flow
 1. The Spring Boot backend receives requests from the frontend.
-2. Controllers in [backend/src/main/java/com/propertyrisk/controller](backend/src/main/java/com/propertyrisk/controller) receive the API calls.
+2. Controllers in [backend/demo/propertyrisk-backend/src/main/java/com/propertyrisk/controller](backend/demo/propertyrisk-backend/src/main/java/com/propertyrisk/controller) receive the API calls.
 3. Services and agents process the request and build a risk report.
 4. The response is returned to the frontend as JSON.
 
@@ -57,19 +57,18 @@ Main backend folders:
 - Added a dedicated frontend API layer so UI code is not mixed directly with networking logic.
 - Added backend health and property-risk endpoints for a clearer integration boundary.
 - Added CORS support so the local Vite frontend can talk to the Spring Boot backend.
-- Removed repeated route-loading logic by consolidating the auth route handling in [frontend/src/App.tsx](frontend/src/App.tsx).
+- Removed repeated route-loading logic by consolidating the auth route handling in [src/App.tsx](src/App.tsx).
 - Added clearer local documentation so the project is easier to understand and extend.
 
 ## 4. How to run locally
 
 ### Backend
 Run from the backend folder:
-- cd backend
+- cd backend/demo/propertyrisk-backend
 - ./mvnw spring-boot:run
 
 ### Frontend
-Run from the frontend folder:
-- cd frontend
+Run from the root project folder:
 - npm install
 - npm run dev
 
