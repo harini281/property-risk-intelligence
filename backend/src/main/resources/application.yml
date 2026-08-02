@@ -47,3 +47,7 @@ external-api:
 logging:
   level:
     com.propertyrisk: INFO
+
+supabase:
+  jwt:
+    secret: ${SUPABASE_JWT_SECRET:changeme}

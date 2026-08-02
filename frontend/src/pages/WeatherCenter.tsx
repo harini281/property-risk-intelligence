@@ -156,7 +156,7 @@ export default function WeatherCenter() {
             </Badge>
             <Badge variant="high">
               <span className="w-1.5 h-1.5 rounded-full bg-risk-high animate-pulse" />
-              {weatherAlerts.length} Active Alerts
+              0 Active Alerts
             </Badge>
           </div>
         </div>
@@ -166,36 +166,36 @@ export default function WeatherCenter() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-xl bg-brand-50 flex items-center justify-center text-brand-600">
-                <CloudSun className="w-7 h-7" />
+                {loading ? <Loader2 className="w-7 h-7 animate-spin" /> : <CloudSun className="w-7 h-7" />}
               </div>
               <div>
                 <div className="flex items-center gap-1.5 text-sm text-ink-500">
                   <MapPin className="w-3.5 h-3.5" />
-                  {currentWeather.location}
+                  {weatherSummary.location}
                 </div>
                 <div className="flex items-baseline gap-2 mt-0.5">
                   <span className="text-4xl font-bold text-ink-900">
-                    {currentWeather.temperature}°
+                    {weatherSummary.temperature == null ? '—' : `${weatherSummary.temperature}°`}
                   </span>
                   <span className="text-sm font-medium text-ink-500">F</span>
                 </div>
-                <p className="text-sm text-ink-600 mt-0.5">{currentWeather.condition}</p>
+                <p className="text-sm text-ink-600 mt-0.5">{weatherSummary.condition}</p>
               </div>
             </div>
             <div className="flex items-center gap-5 text-sm text-ink-500">
               <div className="flex items-center gap-2">
                 <Navigation className="w-4 h-4 text-brand-500" />
                 <span>
-                  Wind {currentWeather.windDirection} {currentWeather.windSpeed} mph
+                  Wind {weatherSummary.windDirection} {weatherSummary.windSpeed == null ? '—' : `${weatherSummary.windSpeed} mph`}
                 </span>
               </div>
               <div className="hidden sm:flex items-center gap-2">
                 <Thermometer className="w-4 h-4 text-brand-500" />
-                <span>Feels like {currentWeather.feelsLike}°F</span>
+                <span>Feels like {weatherSummary.feelsLike == null ? '—' : `${weatherSummary.feelsLike}°F`}</span>
               </div>
               <button className="flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-700">
                 <RefreshCw className="w-3.5 h-3.5" />
-                Updated 2m ago
+                {loading ? 'Loading...' : 'Updated live'}
               </button>
             </div>
           </div>

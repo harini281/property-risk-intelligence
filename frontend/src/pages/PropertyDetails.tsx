@@ -11,12 +11,26 @@ import { InteractiveMap } from '../components/InteractiveMap';
 import { BarChart } from '../components/Charts';
 import { getPropertyById, getRiskLabel } from '../data/mockData';
 import { supabase } from '../lib/supabase';
+import { geocodeAddress, getPropertyRisk } from '../services/api';
+import type { GeocodingApiResponse, PropertyRiskApiResponse } from '../types/risk';
+
+function mapRiskLevelToScore(level: string | undefined) {
+  if (level === 'HIGH') return 75;
+  if (level === 'MEDIUM') return 50;
+  if (level === 'LOW') return 25;
+  return 0;
+}
 
 export default function PropertyDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const property = id ? getPropertyById(id) : undefined;
+  const decodedId = id ? decodeURIComponent(id) : undefined;
+  const property = decodedId ? getPropertyById(decodedId) : undefined;
   const [saved, setSaved] = useState(false);
+  const [resolvedAddress, setResolvedAddress] = useState<GeocodingApiResponse | null>(null);
+  const [liveRisk, setLiveRisk] = useState<PropertyRiskApiResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const checkSaved = async () => {
@@ -28,10 +42,47 @@ export default function PropertyDetails() {
         .maybeSingle();
       setSaved(!!data);
     };
-    checkSaved();
+    void checkSaved();
   }, [property]);
 
-  if (!property) {
+  useEffect(() => {
+    if (!decodedId || property) {
+      setResolvedAddress(null);
+      setLiveRisk(null);
+      setError(null);
+      return;
+    }
+
+    let active = true;
+    const loadLive = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const resolved = await geocodeAddress(decodedId);
+        if (!active) return;
+        setResolvedAddress(resolved);
+        if (!resolved.success || resolved.latitude === null || resolved.longitude === null) {
+          setError(resolved.message ?? 'The selected address could not be resolved.');
+          return;
+        }
+        const risk = await getPropertyRisk(resolved.latitude, resolved.longitude);
+        if (!active) return;
+        setLiveRisk(risk);
+      } catch (cause) {
+        if (!active) return;
+        setError(cause instanceof Error ? cause.message : 'Unable to load live property risk details.');
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    void loadLive();
+    return () => {
+      active = false;
+    };
+  }, [decodedId, property]);
+
+  if (!property && !decodedId) {
     return (
       <AppLayout>
         <Card className="text-center py-12">
@@ -42,17 +93,31 @@ export default function PropertyDetails() {
     );
   }
 
-  const riskBars = [
+  const displayAddress = property?.address ?? resolvedAddress?.displayName ?? decodedId ?? 'Selected property';
+  const displayLocation = property ? `${property.city}, ${property.state} ${property.zip}` : resolvedAddress?.displayName ?? 'Live location';
+  const displayLat = property?.lat ?? resolvedAddress?.latitude ?? 42.2808;
+  const displayLng = property?.lng ?? resolvedAddress?.longitude ?? -83.743;
+  const displayRisk = property ? property.overallRisk : mapRiskLevelToScore(liveRisk?.overallRiskLevel);
+  const displayRiskLabel = property ? getRiskLabel(property.overallRisk) : liveRisk?.overallRiskLevel ?? 'UNKNOWN';
+
+  const riskBars = property ? [
     { label: 'Flood Risk', value: property.risks.flood, icon: <Waves className="w-4 h-4" /> },
     { label: 'Hail Risk', value: property.risks.hail, icon: <CloudHail className="w-4 h-4" /> },
     { label: 'Wind Risk', value: property.risks.wind, icon: <Wind className="w-4 h-4" /> },
     { label: 'Hurricane Risk', value: property.risks.hurricane, icon: <CloudLightning className="w-4 h-4" /> },
     { label: 'Wildfire Risk', value: property.risks.wildfire, icon: <Flame className="w-4 h-4" /> },
+  ] : [
+    { label: 'Flood Risk', value: liveRisk ? (liveRisk.flood.floodRiskLevel === 'HIGH' ? 80 : liveRisk.flood.floodRiskLevel === 'MEDIUM' ? 55 : liveRisk.flood.floodRiskLevel === 'LOW' ? 20 : 0) : 0, icon: <Waves className="w-4 h-4" /> },
+    { label: 'Air Quality', value: liveRisk?.airQuality.aqi ? Math.min(100, Math.round((liveRisk.airQuality.aqi / 500) * 100)) : 0, icon: <CloudHail className="w-4 h-4" /> },
+    { label: 'Wind Risk', value: liveRisk?.weather.windSpeedKph ? Math.min(100, Math.round((liveRisk.weather.windSpeedKph / 120) * 100)) : 0, icon: <Wind className="w-4 h-4" /> },
+    { label: 'Weather Status', value: liveRisk?.weather.success ? 40 : 0, icon: <CloudLightning className="w-4 h-4" /> },
+    { label: 'Coverage', value: liveRisk ? 70 : 0, icon: <Flame className="w-4 h-4" /> },
   ];
 
-  const riskBarData = riskBars.map((r) => ({ label: r.label.replace(' Risk', ''), value: r.value }));
+  const riskBarData = riskBars.map((r) => ({ label: r.label.replace(' Risk', '').replace(' Status', ''), value: r.value }));
 
   const handleSave = async () => {
+    if (!property) return;
     if (saved) {
       await supabase.from('saved_properties').delete().eq('address', property.address);
       setSaved(false);
@@ -66,22 +131,22 @@ export default function PropertyDetails() {
   };
 
   return (
-    <AppLayout breadcrumbs={[{ label: 'Dashboard', to: '/app' }, { label: 'Property Search', to: '/app/search' }, { label: property.address }]}>
+    <AppLayout breadcrumbs={[{ label: 'Dashboard', to: '/app' }, { label: 'Property Search', to: '/app/search' }, { label: displayAddress }]}>
       <div className="space-y-6">
         {/* Hero image */}
         <div className="relative h-64 rounded-xl overflow-hidden">
-          <img src={property.image} alt={property.address} className="w-full h-full object-cover" />
+          <img src={property?.image ?? 'https://images.unsplash.com/photo-1460317442991-0ec209397118?auto=format&fit=crop&w=900&q=80'} alt={displayAddress} className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-ink-950/80 via-ink-950/20 to-transparent" />
           <div className="absolute bottom-0 left-0 p-6 text-white">
-            <h1 className="text-2xl font-bold">{property.address}</h1>
+            <h1 className="text-2xl font-bold">{displayAddress}</h1>
             <p className="flex items-center gap-1.5 text-sm text-white/80 mt-1">
-              <MapPin className="w-4 h-4" /> {property.city}, {property.state} {property.zip}
+              <MapPin className="w-4 h-4" /> {displayLocation}
             </p>
           </div>
           <div className="absolute top-4 right-4 flex gap-2">
-            <button onClick={handleSave} className={saved ? 'btn-primary' : 'btn-secondary'}>
+            {property && <button onClick={handleSave} className={saved ? 'btn-primary' : 'btn-secondary'}>
               {saved ? 'Saved' : 'Save Property'}
-            </button>
+            </button>}
             <button className="btn-secondary">
               <Share2 className="w-4 h-4" /> Share
             </button>
@@ -92,26 +157,35 @@ export default function PropertyDetails() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card className="flex flex-col items-center justify-center">
             <h3 className="text-sm font-semibold text-ink-900 mb-4">Overall Risk Score</h3>
-            <RiskMeter score={property.overallRisk} size="lg" showLabel={false} />
+            <RiskMeter score={displayRisk} size="lg" showLabel={false} />
             <Badge
-              variant={property.overallRisk >= 80 ? 'critical' : property.overallRisk >= 60 ? 'high' : property.overallRisk >= 30 ? 'brand' : 'low'}
+              variant={displayRisk >= 80 ? 'critical' : displayRisk >= 60 ? 'high' : displayRisk >= 30 ? 'brand' : 'low'}
               className="mt-4"
             >
-              {getRiskLabel(property.overallRisk)} Risk
+              {displayRiskLabel} Risk
             </Badge>
+            {loading && <p className="mt-3 text-xs text-ink-500">Loading live risk details…</p>}
+            {error && <p className="mt-3 text-xs text-risk-high">{error}</p>}
           </Card>
 
           <Card className="lg:col-span-2">
             <CardHeader title="Property Information" icon={<FileText className="w-5 h-5" />} />
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <InfoItem icon={<Calendar className="w-4 h-4" />} label="Year Built" value={String(property.yearBuilt)} />
-              <InfoItem icon={<Bed className="w-4 h-4" />} label="Bedrooms" value={String(property.beds)} />
-              <InfoItem icon={<Bath className="w-4 h-4" />} label="Bathrooms" value={String(property.baths)} />
-              <InfoItem icon={<Maximize className="w-4 h-4" />} label="Square Feet" value={property.sqft.toLocaleString()} />
-              <InfoItem label="Property Type" value={property.propertyType} />
-              <InfoItem label="Last Storm Event" value={property.lastStormEvent} />
-              <InfoItem label="Storm Events (since 2008)" value={String(property.stormEventCount)} />
-              <InfoItem label="Risk Level" value={getRiskLabel(property.overallRisk)} />
+              {property ? <>
+                <InfoItem icon={<Calendar className="w-4 h-4" />} label="Year Built" value={String(property.yearBuilt)} />
+                <InfoItem icon={<Bed className="w-4 h-4" />} label="Bedrooms" value={String(property.beds)} />
+                <InfoItem icon={<Bath className="w-4 h-4" />} label="Bathrooms" value={String(property.baths)} />
+                <InfoItem icon={<Maximize className="w-4 h-4" />} label="Square Feet" value={property.sqft.toLocaleString()} />
+                <InfoItem label="Property Type" value={property.propertyType} />
+                <InfoItem label="Last Storm Event" value={property.lastStormEvent} />
+                <InfoItem label="Storm Events (since 2008)" value={String(property.stormEventCount)} />
+                <InfoItem label="Risk Level" value={getRiskLabel(property.overallRisk)} />
+              </> : <>
+                <InfoItem label="Resolved Address" value={resolvedAddress?.displayName ?? 'Pending resolution'} />
+                <InfoItem label="Coordinates" value={`${displayLat.toFixed(4)}, ${displayLng.toFixed(4)}`} />
+                <InfoItem label="Weather" value={liveRisk?.weather.success ? liveRisk.weather.condition ?? 'Available' : 'Pending'} />
+                <InfoItem label="Air Quality" value={liveRisk?.airQuality.success ? `${liveRisk.airQuality.aqi ?? 'N/A'} AQI` : 'Pending'} />
+              </>}
             </div>
           </Card>
         </div>
@@ -146,7 +220,7 @@ export default function PropertyDetails() {
           <Card>
             <CardHeader title="AI Summary" subtitle="Generated by RiskIntel AI" icon={<Brain className="w-5 h-5" />} />
             <div className="p-4 bg-brand-50/50 rounded-lg border border-brand-100">
-              <p className="text-sm text-ink-700 leading-relaxed italic">"{property.aiSummary}"</p>
+              <p className="text-sm text-ink-700 leading-relaxed italic">{property ? `"${property.aiSummary}"` : (liveRisk ? `Live analysis indicates ${liveRisk.overallRiskLevel?.toLowerCase() ?? 'unknown'} risk with ${liveRisk.weather.condition ?? 'current weather'} conditions.` : 'Live risk insights are being loaded from the backend.')}</p>
             </div>
             <div className="flex items-center gap-2 mt-3 text-xs text-ink-400">
               <Brain className="w-3.5 h-3.5" /> Powered by 30+ data sources and historical analysis
@@ -156,12 +230,16 @@ export default function PropertyDetails() {
           <Card>
             <CardHeader title="Recommendations" subtitle="Actionable next steps" icon={<CheckCircle2 className="w-5 h-5" />} />
             <div className="space-y-2.5">
-              {property.recommendations.map((rec, i) => (
+              {(property?.recommendations ?? []).length > 0 ? property!.recommendations.map((rec, i) => (
                 <div key={i} className="flex items-start gap-3 p-3 bg-ink-50 rounded-lg">
                   <CheckCircle2 className="w-4 h-4 text-risk-low shrink-0 mt-0.5" />
                   <span className="text-sm text-ink-700">{rec}</span>
                 </div>
-              ))}
+              )) : (
+                <div className="p-3 bg-ink-50 rounded-lg text-sm text-ink-700">
+                  {liveRisk ? `Flood status: ${liveRisk.flood.floodRiskLevel ?? 'Unknown'} · Air quality: ${liveRisk.airQuality.aqi ?? 'N/A'} AQI` : 'Live recommendations will appear once the backend provides a detailed response.'}
+                </div>
+              )}
             </div>
           </Card>
         </div>
@@ -172,7 +250,7 @@ export default function PropertyDetails() {
             <h3 className="text-sm font-semibold text-ink-900">Location Map</h3>
           </div>
           <InteractiveMap
-            markers={[{ id: property.id, lat: property.lat, lng: property.lng, label: property.address, value: property.overallRisk }]}
+            markers={[{ id: displayAddress, lat: displayLat, lng: displayLng, label: displayAddress, value: displayRisk }]}
             showLayers={false}
             height="h-72"
           />
