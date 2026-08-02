@@ -60,7 +60,7 @@ class SecurityIntegrationTest {
                 .param("latitude", "42.28")
                 .param("longitude", "-83.74")
                 .header(HttpHeaders.AUTHORIZATION,
-                        "Bearer " + createSignedToken(jwtSecret, "user-123", "user@example.com")))
+                        "Bearer " + createSignedToken(jwtSecret, "00000000-0000-0000-0000-000000000123", "user@example.com")))
                 .andExpect(status().isOk());
     }
 

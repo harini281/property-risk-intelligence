@@ -15,9 +15,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 public class UserPersistenceServiceImpl implements UserPersistenceService {
+
+    private static final String DEFAULT_REPORT_TYPE = "homeowner";
 
     private final PropertyRepository propertyRepository;
     private final RiskAssessmentRepository riskAssessmentRepository;
@@ -40,6 +43,7 @@ public class UserPersistenceServiceImpl implements UserPersistenceService {
         if (userId == null || userId.isBlank()) {
             return;
         }
+        UUID userUuid = toUuid(userId);
 
         Property property = propertyRepository.findByLatitudeAndLongitude(latitude, longitude)
                 .orElseGet(() -> {
@@ -51,24 +55,36 @@ public class UserPersistenceServiceImpl implements UserPersistenceService {
                     return propertyRepository.save(newProperty);
                 });
 
-        Optional<RiskAssessment> existing = riskAssessmentRepository.findByUserIdAndPropertyIdAndGeneratedAt(userId,
-                property.getId(), report.getGeneratedAt());
+        // Stable deduplication: avoid re-inserting an assessment for the same
+        // user + property. The previous timestamp-based lookup never matched
+        // because generatedAt is always Instant.now() from the agent, causing
+        // duplicate assessments and reports on every request.
+        Optional<RiskAssessment> existing = riskAssessmentRepository
+                .findByUserIdAndPropertyId(userUuid, property.getId());
         if (existing.isPresent()) {
             return;
         }
 
         RiskAssessment assessment = RiskAssessment.builder()
-                .userId(userId)
+                .userId(userUuid)
                 .property(property)
                 .overallRiskLevel(report.getOverallRiskLevel())
                 .generatedAt(report.getGeneratedAt() != null ? report.getGeneratedAt() : Instant.now())
                 .build();
         riskAssessmentRepository.save(assessment);
 
+        // Report deduplication: do not insert a second report row for the same
+        // user, address, and report type. This prevents repeated report rows
+        // for the same persisted assessment.
+        if (reportRepository.existsByUserIdAndAddressAndReportType(userUuid, property.getAddress(),
+                DEFAULT_REPORT_TYPE)) {
+            return;
+        }
+
         Report persistedReport = Report.builder()
-                .userId(userId)
+                .userId(userUuid)
                 .address(property.getAddress())
-                .reportType("homeowner")
+                .reportType(DEFAULT_REPORT_TYPE)
                 .riskScore(mapRiskLevelToScore(report.getOverallRiskLevel()))
                 .summary(buildSummary(report))
                 .status("completed")
@@ -79,17 +95,17 @@ public class UserPersistenceServiceImpl implements UserPersistenceService {
 
     @Override
     public List<RiskAssessment> getMyRiskAssessments(String userId) {
-        return riskAssessmentRepository.findByUserIdOrderByGeneratedAtDesc(userId);
+        return riskAssessmentRepository.findByUserIdOrderByGeneratedAtDesc(toUuid(userId));
     }
 
     @Override
     public List<Report> getMyReports(String userId) {
-        return reportRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        return reportRepository.findByUserIdOrderByCreatedAtDesc(toUuid(userId));
     }
 
     @Override
     public List<SavedProperty> getSavedProperties(String userId) {
-        return savedPropertyRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        return savedPropertyRepository.findByUserIdOrderByCreatedAtDesc(toUuid(userId));
     }
 
     @Override
@@ -98,12 +114,13 @@ public class UserPersistenceServiceImpl implements UserPersistenceService {
         if (userId == null || userId.isBlank()) {
             throw new IllegalArgumentException("userId is required");
         }
-        Optional<SavedProperty> existing = savedPropertyRepository.findByUserIdAndAddress(userId, address);
+        UUID userUuid = toUuid(userId);
+        Optional<SavedProperty> existing = savedPropertyRepository.findByUserIdAndAddress(userUuid, address);
         if (existing.isPresent()) {
             return existing.get();
         }
         SavedProperty entity = SavedProperty.builder()
-                .userId(userId)
+                .userId(userUuid)
                 .address(address)
                 .riskScore(riskScore)
                 .notes(notes)
@@ -134,5 +151,19 @@ public class UserPersistenceServiceImpl implements UserPersistenceService {
             case HIGH -> 85;
             case UNKNOWN -> 50;
         };
+    }
+
+    /**
+     * Converts the Supabase JWT {@code sub} claim (a String UUID) into a
+     * {@link UUID} for persistence in uuid-typed columns.
+     *
+     * @throws IllegalArgumentException if the subject is not a valid UUID
+     */
+    private UUID toUuid(String userId) {
+        try {
+            return UUID.fromString(userId);
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("userId must be a valid UUID, got: " + userId, ex);
+        }
     }
 }

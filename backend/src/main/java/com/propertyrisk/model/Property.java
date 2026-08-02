@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -17,9 +18,19 @@ import lombok.Setter;
  *
  * <p>Persisted to the Supabase-hosted PostgreSQL database. Coordinates are
  * used as the primary input to the risk agents.</p>
+ *
+ * <p>Schema alignment (see migration 20260802120000):
+ * <ul>
+ *   <li>{@code id} — bigserial PK</li>
+ *   <li>{@code address} — text, not null</li>
+ *   <li>{@code latitude}/{@code longitude} — double precision, not null</li>
+ *   <li>Unique constraint {@code uq_properties_coordinates (latitude, longitude)}</li>
+ * </ul>
  */
 @Entity
-@Table(name = "properties")
+@Table(name = "properties", uniqueConstraints = {
+        @UniqueConstraint(name = "uq_properties_coordinates", columnNames = {"latitude", "longitude"})
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -29,15 +40,16 @@ public class Property {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id")
     private Long id;
 
-    @Column(nullable = false)
+    @Column(name = "address", nullable = false, columnDefinition = "text")
     private String address;
 
-    @Column(nullable = false)
+    @Column(name = "latitude", nullable = false)
     private Double latitude;
 
-    @Column(nullable = false)
+    @Column(name = "longitude", nullable = false)
     private Double longitude;
 
     // TODO: Add auditing fields (createdAt, updatedAt) once persistence

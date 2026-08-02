@@ -13,7 +13,19 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.Instant;
+import java.util.UUID;
 
+/**
+ * JPA entity representing a generated property risk report stored in the
+ * Supabase PostgreSQL {@code reports} table.
+ *
+ * <p>Schema alignment (see migration 20260710184846):
+ * <ul>
+ *   <li>{@code id} — uuid PK defaulted by {@code gen_random_uuid()}</li>
+ *   <li>{@code user_id} — uuid FK to {@code auth.users(id)}</li>
+ *   <li>{@code created_at} — timestamptz defaulted to {@code now()} (nullable)</li>
+ * </ul>
+ */
 @Entity
 @Table(name = "reports")
 @Getter
@@ -24,26 +36,28 @@ import java.time.Instant;
 public class Report {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "id")
+    private UUID id;
 
-    @Column(nullable = false)
-    private String userId;
+    @Column(name = "user_id", nullable = false)
+    private UUID userId;
 
-    @Column(nullable = false)
+    @Column(name = "address", nullable = false, columnDefinition = "text")
     private String address;
 
-    @Column(nullable = false)
+    @Column(name = "report_type", nullable = false, columnDefinition = "text")
     private String reportType;
 
+    @Column(name = "risk_score")
     private Integer riskScore;
 
-    @Column(length = 2000)
+    @Column(name = "summary", columnDefinition = "text")
     private String summary;
 
-    @Column(nullable = false)
+    @Column(name = "status", nullable = false)
     private String status;
 
-    @Column(nullable = false)
+    @Column(name = "created_at")
     private Instant createdAt;
 }

@@ -17,6 +17,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 
 import java.time.Instant;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyDouble;
@@ -43,9 +44,11 @@ class PropertyRiskServicePersistenceTest {
     @MockBean
     private AuthContext authContext;
 
+    private static final UUID USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000123");
+
     @Test
     void persistsAssessmentAndReportForAuthenticatedUser() {
-        when(authContext.currentUser()).thenReturn(new SupabaseJwtValidator.JwtClaims("user-123", "user@example.com"));
+        when(authContext.currentUser()).thenReturn(new SupabaseJwtValidator.JwtClaims(USER_ID.toString(), "user@example.com"));
         when(propertyRiskAgent.assessPropertyRisk(anyDouble(), anyDouble())).thenReturn(sampleReport());
 
         propertyRiskService.getPropertyRisk(42.28, -83.74);
@@ -57,8 +60,21 @@ class PropertyRiskServicePersistenceTest {
         var assessment = riskAssessmentRepository.findAll().get(0);
         var report = reportRepository.findAll().get(0);
 
-        assertThat(assessment.getUserId()).isEqualTo("user-123");
-        assertThat(report.getUserId()).isEqualTo("user-123");
+        assertThat(assessment.getUserId()).isEqualTo(USER_ID);
+        assertThat(report.getUserId()).isEqualTo(USER_ID);
+    }
+
+    @Test
+    void doesNotDuplicateAssessmentOrReportForSameUserAndProperty() {
+        when(authContext.currentUser()).thenReturn(new SupabaseJwtValidator.JwtClaims(USER_ID.toString(), "user@example.com"));
+        when(propertyRiskAgent.assessPropertyRisk(anyDouble(), anyDouble())).thenReturn(sampleReport());
+
+        propertyRiskService.getPropertyRisk(42.28, -83.74);
+        propertyRiskService.getPropertyRisk(42.28, -83.74);
+
+        assertThat(propertyRepository.count()).isEqualTo(1);
+        assertThat(riskAssessmentRepository.count()).isEqualTo(1);
+        assertThat(reportRepository.count()).isEqualTo(1);
     }
 
     private PropertyRiskReportDTO sampleReport() {

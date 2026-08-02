@@ -13,7 +13,19 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.Instant;
+import java.util.UUID;
 
+/**
+ * JPA entity representing a user-saved/bookmarked property stored in the
+ * Supabase PostgreSQL {@code saved_properties} table.
+ *
+ * <p>Schema alignment (see migration 20260710184846):
+ * <ul>
+ *   <li>{@code id} — uuid PK defaulted by {@code gen_random_uuid()}</li>
+ *   <li>{@code user_id} — uuid FK to {@code auth.users(id)}</li>
+ *   <li>{@code created_at} — timestamptz defaulted to {@code now()} (nullable)</li>
+ * </ul>
+ */
 @Entity
 @Table(name = "saved_properties")
 @Getter
@@ -24,20 +36,22 @@ import java.time.Instant;
 public class SavedProperty {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "id")
+    private UUID id;
 
-    @Column(nullable = false)
-    private String userId;
+    @Column(name = "user_id", nullable = false)
+    private UUID userId;
 
-    @Column(nullable = false)
+    @Column(name = "address", nullable = false, columnDefinition = "text")
     private String address;
 
+    @Column(name = "risk_score")
     private Integer riskScore;
 
-    @Column(length = 2000)
+    @Column(name = "notes", columnDefinition = "text")
     private String notes;
 
-    @Column(nullable = false)
+    @Column(name = "created_at")
     private Instant createdAt;
 }

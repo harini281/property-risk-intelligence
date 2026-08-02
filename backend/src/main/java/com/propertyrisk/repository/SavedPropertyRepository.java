@@ -6,11 +6,12 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
-public interface SavedPropertyRepository extends JpaRepository<SavedProperty, Long> {
+public interface SavedPropertyRepository extends JpaRepository<SavedProperty, UUID> {
 
-    List<SavedProperty> findByUserIdOrderByCreatedAtDesc(String userId);
+    List<SavedProperty> findByUserIdOrderByCreatedAtDesc(UUID userId);
 
-    Optional<SavedProperty> findByUserIdAndAddress(String userId, String address);
+    Optional<SavedProperty> findByUserIdAndAddress(UUID userId, String address);
 }
