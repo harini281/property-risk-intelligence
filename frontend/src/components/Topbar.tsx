@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Bell, Menu, ChevronRight, CloudSun } from 'lucide-react';
-import { currentWeather } from '../data/mockData';
+import { Search, Bell, Menu, ChevronRight, CloudSun, Loader2 } from 'lucide-react';
+import { getWeather } from '../services/api';
+import type { PropertyRiskApiResponse } from '../types/risk';
 
 interface TopbarProps {
   onMenuClick: () => void;
@@ -11,11 +12,45 @@ interface TopbarProps {
 export function Topbar({ onMenuClick, breadcrumbs = [] }: TopbarProps) {
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
+  const [weather, setWeather] = useState<PropertyRiskApiResponse['weather'] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    void getWeather(42.2808, -83.743)
+      .then((data) => {
+        if (!active) return;
+        if (!data.success) {
+          setWeather(null);
+          setError(true);
+          return;
+        }
+        setWeather(data);
+        setError(false);
+      })
+      .catch(() => {
+        if (!active) return;
+        setWeather(null);
+        setError(true);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     navigate(`/app/search?q=${encodeURIComponent(query)}`);
   };
+
+  const temperatureF = weather?.temperatureCelsius == null
+    ? null
+    : Math.round((weather.temperatureCelsius * 9) / 5 + 32);
 
   return (
     <header className="sticky top-0 z-20 h-16 bg-white/80 backdrop-blur-xl border-b border-ink-200/60 flex items-center px-4 lg:px-6 gap-4">
@@ -58,8 +93,26 @@ export function Topbar({ onMenuClick, breadcrumbs = [] }: TopbarProps) {
       <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-ink-50 rounded-lg border border-ink-200">
         <CloudSun className="w-5 h-5 text-brand-500" />
         <div className="text-right">
-          <p className="text-sm font-semibold text-ink-900">{currentWeather.temperature}°F</p>
-          <p className="text-[10px] text-ink-500">{currentWeather.location}</p>
+          {loading ? (
+            <>
+              <p className="text-sm font-semibold text-ink-400 flex items-center gap-1">
+                <Loader2 className="w-3 h-3 animate-spin" /> —
+              </p>
+              <p className="text-[10px] text-ink-400">Loading…</p>
+            </>
+          ) : weather && !error ? (
+            <>
+              <p className="text-sm font-semibold text-ink-900">
+                {temperatureF == null ? '—' : `${temperatureF}°F`}
+              </p>
+              <p className="text-[10px] text-ink-500">{weather.location ?? 'Live location'}</p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-semibold text-ink-400">—</p>
+              <p className="text-[10px] text-ink-400">Weather unavailable</p>
+            </>
+          )}
         </div>
       </div>
 
