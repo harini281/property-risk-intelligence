@@ -5,9 +5,9 @@ spring:
   # Supabase PostgreSQL connection.
   # Populate via environment variables - do not commit real credentials.
   datasource:
-    url: ${SUPABASE_DB_URL:jdbc:postgresql://localhost:5432/postgres}
-    username: ${SUPABASE_DB_USERNAME:postgres}
-    password: ${SUPABASE_DB_PASSWORD:changeme}
+    url: ${SUPABASE_DB_URL:postgresql://postgres:[S2MPn2@9^bHmb&Y]@db.kcjauiwgtpjmcloqtmly.supabase.co:5432/postgres}
+    username: postgres
+    password: S2MPn2@9^bHmb&Y
     driver-class-name: org.postgresql.Driver
 
   jpa:
