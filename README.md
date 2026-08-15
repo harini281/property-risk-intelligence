@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 # Property Risk Intelligence
 
 This project is a full-stack property risk dashboard with a clear separation between the frontend and the backend.
@@ -90,5 +90,4 @@ Run from the root project folder:
 =======
 # property-risk-intelligence
 
-[![Open in Bol
->>>>>>> c555deeefff48b631003c8921c98b6bf6eae0336
+
